@@ -1,0 +1,4 @@
+colorama==0.4.6
+requests==2.31.0
+pytz==2024.1
+rich==13.7.0
