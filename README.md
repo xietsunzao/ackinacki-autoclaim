@@ -25,7 +25,7 @@ A Python-based automation bot for claiming rewards from the Acki Nacki Telegram 
 
 ```bash
 git clone https://github.com/xietsunzao/ackinacki-autoclaim.git
-cd ackinacki-auto-claim
+cd ackinacki-autoclaim
 ```
 
 ### Step 2: Install Dependencies
