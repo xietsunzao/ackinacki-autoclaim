@@ -61,6 +61,11 @@ class AckinackiAPI:
         response = requests.post(f'{self.BASE_URL}/users/claim/invited_friend', headers=self._get_headers())
         return response
     
-    def claim_farming(self):
-        response = requests.post(f'{self.BASE_URL}/users/claim/daily_farming_v2', headers=self._get_headers())
+    def claim_farming(self, test_mode=False):
+        if test_mode:
+            url = f'{self.BASE_URL}/users/claim/wrong_endpoint'
+        else:
+            url = f'{self.BASE_URL}/users/claim/daily_farming_v2'
+        
+        response = requests.post(url, headers=self._get_headers())
         return response 
