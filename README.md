@@ -98,12 +98,6 @@ The bot includes comprehensive error handling for:
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Support
-
-If you find this bot helpful, consider supporting the developer:
-
-0x12aab224FA1D30Ee44575335B7767D8c89cD70A9
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
