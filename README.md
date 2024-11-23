@@ -2,7 +2,9 @@
 
 A Python-based automation bot for claiming rewards from the Acki Nacki Telegram Web App.
 
-![Acki Nacki Bot Demo](add_screenshot_here.png)
+![Acki Nacki Bot Demo](https://cdn.prod.website-files.com/668d27deabaf19c425217a24/66979cdce6212609480c88fa_Phone%20pic.png)
+
+![Acki Nacki Bot Demo](https://github.com/user-attachments/assets/5f86aad7-d5eb-4724-a3d1-02f2e1a57952)
 
 ## Features
 
@@ -48,7 +50,7 @@ To get your Telegram token from the Acki Nacki web app:
 
 Example of where to find the token:
 
-![Token Location Guide](add_token_guide_screenshot.png)
+![Token Location Guide](https://github.com/user-attachments/assets/0bed9884-3ade-4418-a010-379b6e68c11b)
 
 **Note**: The token is sensitive information. Never share it with anyone.
 
