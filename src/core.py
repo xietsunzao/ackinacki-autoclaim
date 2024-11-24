@@ -56,6 +56,10 @@ def display_info(user_data, end_time, reward, first_run=False, waiting_for_next=
         boost_points = user_data['queue']['boost']
         friends_count = user_data.get('friends', 0)
         
+        # Display credit
+        console.print("[dim]Created by @xietsunzao[/]")
+        console.print() 
+        
         # Display static information
         console.print(f"🎮 {username}⭐ {boost_points:,} Points")
         console.print(f"👥 {friends_count} Friends")
