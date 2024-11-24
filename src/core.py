@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import time
 from rich.console import Console
 
@@ -46,8 +46,8 @@ def format_time(seconds):
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-def display_info(user_data, end_time, reward, first_run=False):
-    if first_run:
+def display_info(user_data, end_time, reward, first_run=False, waiting_for_next=False, next_start_time=None):
+    if first_run or waiting_for_next:
         console.clear()
         
         # Get user info
@@ -75,11 +75,21 @@ def display_info(user_data, end_time, reward, first_run=False):
         
         console.print(f"{' '.join(boost_boxes)}")
         print() # Add empty line for timer
+
+    # Timer display
+    current_time = datetime.now(timezone.utc)
     
-    # Timer display (both first run and updates)
-    remaining = max(0, int(end_time - time.time()))
-    if first_run:
-        print(f"Remaining Time {format_time(remaining)}", end='', flush=True)
+    if waiting_for_next and next_start_time:
+        wait_time = next_start_time - current_time
+        remaining_seconds = int(wait_time.total_seconds())
+        if first_run:
+            print(f"Next farming will unlock in {format_time(remaining_seconds)}", end='', flush=True)
+        else:
+            print(f"\rNext farming will unlock in {format_time(remaining_seconds)}", end='', flush=True)
     else:
-        print(f"\rRemaining Time {format_time(remaining)}", end='', flush=True)
+        remaining = max(0, int(end_time - time.time()))
+        if first_run:
+            print(f"Remaining Time {format_time(remaining)}", end='', flush=True)
+        else:
+            print(f"\rRemaining Time {format_time(remaining)}", end='', flush=True)
     

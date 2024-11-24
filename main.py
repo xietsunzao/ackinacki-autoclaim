@@ -1,6 +1,6 @@
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from src import (
     AckinackiAPI, 
     read_or_create_token, 
@@ -12,6 +12,21 @@ from src import (
     TokenExpiredError,
     TokenInvalidError
 )
+
+def parse_datetime(date_str):
+    try:
+        # First try the standard format
+        return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+    except ValueError:
+        # If that fails, try removing microseconds beyond 6 digits
+        parts = date_str.split('.')
+        if len(parts) == 2:
+            base, fraction = parts
+            # Truncate to 6 digits for microseconds
+            fraction = fraction[:6] + 'Z' if fraction.endswith('Z') else fraction[:6]
+            modified_date_str = f"{base}.{fraction}"
+            return datetime.fromisoformat(modified_date_str.replace('Z', '+00:00'))
+        raise
 
 def main():
     sys.tracebacklimit = 0
@@ -29,38 +44,47 @@ def main():
     last_api_call = 0
     last_display_update = 0
     claiming_attempted = False
+    start_time = None
     
     try:
         while True:
             try:
                 current_time = time.time()
+                current_time_dt = datetime.now(timezone.utc)
                 
                 if current_time - last_api_call >= 5:
                     user_data = api.get_user_data()
                     last_api_call = current_time
                     
-                    # Check if farming needs to be started
                     daily_farming = user_data.get('daily_farming', {}).get('daily_farming_v2', {})
+                    reward = daily_farming.get('reward', 0)
                     
-                    # Check if farming is claimed or needs to be started
+                    if daily_farming and 'metadata' in daily_farming:
+                        start_time_str = daily_farming['metadata'].get('start_at')
+                        if start_time_str:
+                            start_time = parse_datetime(start_time_str)
+                    
                     if daily_farming.get('claimed', False) or not daily_farming or daily_farming.get('claim_at') is None:
-                        console.print("[yellow]Starting farming session...[/]")
-                        start_response = api.start_farming()
+                        if start_time and current_time_dt < start_time:
+                            display_info(user_data, 0, reward, first_run=True, 
+                                       waiting_for_next=True, next_start_time=start_time)
+                            last_display_update = current_time
+                            time.sleep(1)
+                            continue
                         
-                        if start_response.status_code == 200:
-                            console.print("[green]Farming session started successfully![/]")
-                            claiming_attempted = False
-                            last_api_call = 0  # Force refresh user data
-                        else:
-                            console.print(f"[red]Failed to start farming: {start_response.status_code}[/]")
+                        start_response = api.start_farming()
+                        if isinstance(start_response, dict) and start_response['status'] == 'waiting':
+                            display_info(user_data, 0, reward, first_run=True, 
+                                       waiting_for_next=True, next_start_time=start_time)
+                            last_display_update = current_time
+                            time.sleep(5)
+                            continue
                         
                         time.sleep(5)
                         continue
                     
-                    claim_time = datetime.fromisoformat(daily_farming['claim_at'].replace('Z', '+00:00')).timestamp()
-                    reward = daily_farming.get('reward', 0)
+                    claim_time = parse_datetime(daily_farming['claim_at']).timestamp()
                     
-                    # Check if it's time to claim
                     if current_time >= claim_time and not claiming_attempted:
                         console.print("\n[green]Claiming farming reward...[/]")
                         claim_response = api.claim_farming()
@@ -76,13 +100,19 @@ def main():
                         time.sleep(5)
                         continue
                     
-                    # Update display
-                    display_info(user_data, claim_time, reward, first_run=(last_display_update == 0))
+                    if start_time and current_time_dt < start_time:
+                        display_info(user_data, 0, reward, first_run=(last_display_update == 0), 
+                                   waiting_for_next=True, next_start_time=start_time)
+                    else:
+                        display_info(user_data, claim_time, reward, first_run=(last_display_update == 0))
                     last_display_update = current_time
                 
-                # Update timer more frequently
                 elif current_time - last_display_update >= 1:
-                    display_info(user_data, claim_time, reward, first_run=False)
+                    if start_time and current_time_dt < start_time:
+                        display_info(user_data, 0, reward, first_run=False, 
+                                   waiting_for_next=True, next_start_time=start_time)
+                    else:
+                        display_info(user_data, claim_time, reward, first_run=False)
                     last_display_update = current_time
                 
                 time.sleep(0.1)

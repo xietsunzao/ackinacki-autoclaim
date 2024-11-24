@@ -33,6 +33,7 @@ class AckinackiAPI:
     def get_user_data(self):
         response = requests.get(f'{self.BASE_URL}/users/me', headers=self._get_headers())
         data = response.json()
+        # print(data)
         
         if response.status_code == 401:
             raise TokenExpiredError("Token has expired")
@@ -55,7 +56,22 @@ class AckinackiAPI:
         headers = self._get_headers()
         headers['content-length'] = '0'
         response = requests.post(f'{self.BASE_URL}/users/action/farm/v2', headers=headers)
-        return response
+
+        try:
+            data = response.json()
+            if response.status_code == 400 and data.get('message') == 'Too early for start farming':
+                return {
+                    'status': 'waiting',
+                    'message': 'Too early for start farming',
+                    'data': data
+                }
+        except:
+            pass
+        
+        return {
+            'status': 'success' if response.status_code == 200 else 'error',
+            'response': response
+        }
     
     def claim_friend_bonus(self):
         response = requests.post(f'{self.BASE_URL}/users/claim/invited_friend', headers=self._get_headers())
