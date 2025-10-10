@@ -2,9 +2,10 @@ import sys
 import time
 from datetime import datetime, timezone
 from src import (
-    AckinackiAPI, 
-    read_or_create_token, 
-    display_info, 
+    AckinackiAPI,
+    authenticate_with_session_data,
+    read_or_create_session_data,
+    display_info,
     console,
     handle_api_error,
     handle_program_exit,
@@ -30,91 +31,91 @@ def parse_datetime(date_str):
 
 def main():
     sys.tracebacklimit = 0
-    
-    telegram_data = read_or_create_token()
-    if not telegram_data:
-        console.print("[red]No token provided. Exiting...[/]")
+
+    # Read session data from token.txt
+    session_data = read_or_create_session_data()
+    if not session_data:
+        console.print("[red]No session data provided. Exiting...[/]")
         return
-    
+
+    # Exchange session for access token
+    access_token = authenticate_with_session_data(session_data)
+    if not access_token:
+        console.print("[red]Authentication failed. Exiting...[/]")
+        return
+
     console.print("[green]Starting bot...[/]")
     time.sleep(1)
     console.clear()
-    
-    api = AckinackiAPI(telegram_data)
+
+    api = AckinackiAPI(access_token)
     last_api_call = 0
     last_display_update = 0
     claiming_attempted = False
-    start_time = None
-    
+    user_data = None
+    farming_task = None
+    claim_time = 0
+
     try:
         while True:
             try:
                 current_time = time.time()
                 current_time_dt = datetime.now(timezone.utc)
-                
+
                 if current_time - last_api_call >= 5:
+                    # Get user data and farming task status
                     user_data = api.get_user_data()
+                    farming_task = api.get_farming_task()
                     last_api_call = current_time
-                    
-                    daily_farming = user_data.get('daily_farming', {}).get('daily_farming_v2', {})
-                    reward = daily_farming.get('reward', 0)
-                    
-                    if daily_farming and 'metadata' in daily_farming:
-                        start_time_str = daily_farming['metadata'].get('start_at')
-                        if start_time_str:
-                            start_time = parse_datetime(start_time_str)
-                    
-                    if daily_farming.get('claimed', False) or not daily_farming or daily_farming.get('claim_at') is None:
-                        if start_time and current_time_dt < start_time:
-                            display_info(user_data, 0, reward, first_run=True, 
-                                       waiting_for_next=True, next_start_time=start_time)
-                            last_display_update = current_time
-                            time.sleep(1)
-                            continue
-                        
-                        start_response = api.start_farming()
-                        if isinstance(start_response, dict) and start_response['status'] == 'waiting':
-                            display_info(user_data, 0, reward, first_run=True, 
-                                       waiting_for_next=True, next_start_time=start_time)
-                            last_display_update = current_time
-                            time.sleep(5)
-                            continue
-                        
-                        time.sleep(5)
+
+                    if not farming_task or not farming_task.get('reward'):
+                        # No farming task, try to start one
+                        console.print("[yellow]No active farming task. Starting...[/]")
+                        api.start_farming()
+                        time.sleep(2)
                         continue
-                    
-                    claim_time = parse_datetime(daily_farming['claim_at']).timestamp()
-                    
+
+                    reward_data = farming_task['reward']
+                    task_id = farming_task['id']
+
+                    # Check if already claimed
+                    if reward_data.get('claimed', False):
+                        # Already claimed, start new farming
+                        console.print("[yellow]Reward already claimed. Starting new farming...[/]")
+                        api.start_farming()
+                        claiming_attempted = False
+                        time.sleep(2)
+                        continue
+
+                    # Get claim time
+                    claim_time = parse_datetime(reward_data['claim_at']).timestamp()
+
+                    # Check if ready to claim
                     if current_time >= claim_time and not claiming_attempted:
                         console.print("\n[green]Claiming farming reward...[/]")
-                        claim_response = api.claim_farming()
+                        claim_response = api.claim_farming(task_id)
                         claiming_attempted = True
-                        
-                        if claim_response.status_code == 200:
+
+                        if claim_response['status'] == 'success':
                             console.print("[green]Successfully claimed reward![/]")
-                            last_api_call = 0  # Force refresh user data
+                            last_api_call = 0  # Force refresh
                         else:
-                            console.print(f"[red]Failed to claim reward: {claim_response.status_code}[/]")
-                            claiming_attempted = False  # Allow retry on next iteration
-                        
+                            console.print(f"[red]Failed to claim reward: {claim_response['status_code']}[/]")
+                            claiming_attempted = False
+
                         time.sleep(5)
                         continue
-                    
-                    if start_time and current_time_dt < start_time:
-                        display_info(user_data, 0, reward, first_run=(last_display_update == 0), 
-                                   waiting_for_next=True, next_start_time=start_time)
-                    else:
-                        display_info(user_data, claim_time, reward, first_run=(last_display_update == 0))
+
+                    # Display info
+                    display_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
                     last_display_update = current_time
-                
+
                 elif current_time - last_display_update >= 1:
-                    if start_time and current_time_dt < start_time:
-                        display_info(user_data, 0, reward, first_run=False, 
-                                   waiting_for_next=True, next_start_time=start_time)
-                    else:
-                        display_info(user_data, claim_time, reward, first_run=False)
-                    last_display_update = current_time
-                
+                    # Update display every second (only if we have data)
+                    if user_data and farming_task:
+                        display_info(user_data, farming_task, claim_time, first_run=False)
+                        last_display_update = current_time
+
                 time.sleep(0.1)
                 
             except KeyboardInterrupt:

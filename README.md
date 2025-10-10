@@ -36,25 +36,29 @@ Install the required Python packages:
 pip install -r requirements.txt
 ```
 
-### Step 3: Get Your Token
+### Step 3: Get Your Session Data
 
-To get your Telegram token from the Acki Nacki web app:
+To get your session data from the Acki Nacki web app:
 
-1. Open Acki Nacki in Telegram Web App (https://twa.ackinacki.org/)
-2. Open Developer Tools (F12 or right-click and select "Inspect")
-3. Go to the "Network" tab
-4. Look for requests to `/api/users/me` endpoint
-5. Click on the request
-6. In the "Headers" section, find "telegram-data" under Request Headers
-7. Copy the entire token value (starts with 'eyJ')
+1. Open Telegram and start the Acki Nacki bot
+2. When you get the start link, it will look like: `https://t.ackinacki.com/?startapp=eyJ...`
+3. Copy **only the base64 part** after `startapp=` (starts with 'eyJ')
 
-Example of where to find the token:
+   Example:
+   ```
+   eyJzZXNzaW9uX2lkIjoiNDQ5MzNmYzctZjQ5Yi00MmRlLWFkNTQtNDYxMTJjZDM3YWU4IiwibG9jYWxlIjoiZW4iLCJyZWRpcmVjdCI6bnVsbH0
+   ```
 
-![Token Location Guide](https://github.com/user-attachments/assets/0bed9884-3ade-4418-a010-379b6e68c11b)
+4. Place this session data in `token.txt` file (or paste it when the bot prompts you)
 
-**Note**: The token is sensitive information. Never share it with anyone.
+**Alternative method** - Get from browser:
+1. Open Acki Nacki in browser: https://t.ackinacki.com
+2. Open Developer Tools (F12)
+3. Go to Network tab
+4. Look for the initial page load
+5. Find the URL parameter `startapp=` and copy the base64 value
 
-Place your token in `token.txt` file or the bot will prompt you to enter it when first running.
+**Note**: The session data is sensitive information. Never share it with anyone.
 
 ### Step 4: Run the Bot
 
@@ -66,16 +70,18 @@ python main.py
 
 The bot performs the following operations:
 
-1. Validates and manages your Telegram authentication token
-2. Connects to the Acki Nacki API
-3. Monitors your farming status
-4. Automatically starts farming sessions when needed
-5. Displays real-time information including:
+1. Reads session data from `token.txt`
+2. Exchanges session ID for a fresh access token
+3. Connects to the Acki Nacki API
+4. Monitors your farming task status
+5. Automatically claims rewards when farming completes
+6. Automatically starts new farming sessions
+7. Displays real-time information including:
    - Username and points
    - Friends count
-   - Farm boost level
-   - Boost progress boxes
-   - Countdown timer
+   - Farm boost level (1-∞)
+   - Boost progress boxes (5 per day)
+   - Countdown timer until next claim
 
 ## Display Information
 
