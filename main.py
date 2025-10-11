@@ -12,7 +12,8 @@ from src import (
     handle_program_exit,
     handle_token_error,
     TokenExpiredError,
-    TokenInvalidError
+    TokenInvalidError,
+    PopitsManager
 )
 from src.display import (
     display_enhanced_info,
@@ -25,6 +26,35 @@ from src.display import (
 # Options: 'compact' (original style), 'enhanced' (with panels and tables)
 DISPLAY_MODE = 'compact'  # Change to 'enhanced' for more visual display
 SHOW_API_STATUS = False   # Set to True to show spinners during API calls
+
+# Configuration: Popits Feature
+POPITS_CONFIG = {
+    # Feature toggle
+    'enabled': True,           # Set to True to enable Popits feature
+
+    # Timing
+    'check_interval': 300,         # Check every 5 minutes (300 seconds)
+    'watch_delay': 3,              # Wait 3s between watching reels
+
+    # Reels watching
+    'reels_to_watch_per_cycle': 10,  # Watch ~10 unwatched reels per cycle
+
+    # Strategy: Farm mints first, tap when max reached
+    'max_vdf_per_cycle': 3,         # Max tapping challenges when mints = 3
+
+    # VDF Human Simulation (CRITICAL: Stay under 100 taps!)
+    'vdf_min_taps': 40,          # Minimum taps (SAFE)
+    'vdf_max_taps': 85,          # Maximum taps (UNDER 100!)
+
+    # Safety
+    'respect_daily_limit': True, # Stop at max_count
+    'stop_if_banned': True,      # Stop if unban_at != null
+    'verify_taps': True,         # Always verify (anti-bot)
+
+    # Display
+    'show_progress': True,       # Show tapping animation
+    'show_stats': True,          # Show session stats
+}
 
 def save_tokens(access_token, refresh_token):
     """Save tokens to file for persistence"""
@@ -104,6 +134,16 @@ def main():
         show_status=SHOW_API_STATUS,
         on_token_refresh=save_tokens
     )
+
+    # Initialize Popits Manager if enabled
+    popits_manager = None
+    last_popits_check = 0
+    if POPITS_CONFIG['enabled']:
+        console.print("[green]✓ Popits feature enabled[/]")
+        popits_manager = PopitsManager(api, POPITS_CONFIG)
+    else:
+        console.print("[dim]Popits feature disabled (set POPITS_CONFIG['enabled'] = True to enable)[/]")
+
     last_api_call = 0
     last_display_update = 0
     claiming_attempted = False
@@ -116,6 +156,15 @@ def main():
             try:
                 current_time = time.time()
                 current_time_dt = datetime.now(timezone.utc)
+
+                # Run Popits cycle if enabled and interval passed
+                if popits_manager and (current_time - last_popits_check >= POPITS_CONFIG['check_interval']):
+                    console.print("\n[bold yellow]═══════════════════════════════════[/]")
+                    console.print("[bold yellow]   Popits Cycle Triggered   [/]")
+                    console.print("[bold yellow]═══════════════════════════════════[/]\n")
+                    popits_manager.run_cycle()
+                    last_popits_check = current_time
+                    console.print(f"\n[cyan]Next Popits check in {POPITS_CONFIG['check_interval']//60} minutes[/]\n")
 
                 if current_time - last_api_call >= 5:
                     # Get user data and farming task status

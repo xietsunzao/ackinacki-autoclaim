@@ -192,4 +192,219 @@ class AckinackiAPI:
             'status': 'success' if response.status_code == 200 else 'error',
             'status_code': response.status_code,
             'response': response
-        } 
+        }
+
+    # ==================== Popits API Methods ====================
+
+    def get_popits_me(self):
+        """
+        Get user mints status and limits
+
+        Returns:
+            dict: {'mints': int, 'limits': {...}, 'unban_at': timestamp or null}
+        """
+        headers = self._get_headers()
+        response = self.session.get(f'{self.BASE_URL}/popits/me', headers=headers)
+        return response.json() if response.status_code == 200 else None
+
+    def get_popcoins(self, cursor=0):
+        """
+        Fetch popcoin collections
+
+        Args:
+            cursor (int): Pagination cursor (default: 0)
+
+        Returns:
+            dict: {'data': [...], 'next_cursor': int or null}
+        """
+        headers = self._get_headers()
+        response = self.session.get(
+            f'{self.BASE_URL}/popits/popcoins',
+            params={'cursor': cursor},
+            headers=headers
+        )
+        return response.json() if response.status_code == 200 else None
+
+    def get_popits(self, cursor=0, popcoin_id=None, limit=20):
+        """
+        Fetch popits from collection
+
+        Args:
+            cursor (int): Pagination cursor (default: 0)
+            popcoin_id (str): Filter by collection ID (optional)
+            limit (int): Results per page (default: 20)
+
+        Returns:
+            dict: {'data': [...], 'next_cursor': int or null}
+        """
+        headers = self._get_headers()
+        params = {
+            'cursor': cursor,
+            'limit': limit,
+            'popcoin_only': 'false'
+        }
+        if popcoin_id:
+            params['popcoin_id'] = popcoin_id
+
+        response = self.session.get(
+            f'{self.BASE_URL}/popits',
+            params=params,
+            headers=headers
+        )
+        return response.json() if response.status_code == 200 else None
+
+    def watch_popit(self, popit_id):
+        """
+        Watch a popit (record view)
+
+        Args:
+            popit_id (str): Popit ID to watch
+
+        Returns:
+            tuple: (success: bool, status_code: int, response_data: dict or str)
+        """
+        headers = self._get_headers()
+        headers['content-length'] = '0'
+        response = self.session.post(
+            f'{self.BASE_URL}/popits/{popit_id}/watch',
+            headers=headers
+        )
+
+        # Accept both 200 OK and 204 No Content as success
+        success = response.status_code in [200, 204]
+        response_data = None
+
+        # Try to parse response
+        try:
+            if response.text:
+                response_data = response.json()
+            else:
+                response_data = "No content"
+        except:
+            response_data = response.text[:100] if response.text else f"Status {response.status_code}"
+
+        return (success, response.status_code, response_data)
+
+    def create_vdf_session(self, reference_id):
+        """
+        Create VDF challenge session
+
+        Args:
+            reference_id (str): Popit ID reference
+
+        Returns:
+            dict: {'id': str, 'seed': str, 'targetBits': int}
+        """
+        headers = self._get_headers()
+        headers['content-type'] = 'application/json'
+
+        response = self.session.post(
+            f'{self.BASE_URL}/v1/vdf/sessions',
+            headers=headers,
+            json={'reference_id': reference_id}
+        )
+        return response.json() if response.status_code == 200 else None
+
+    def view_popits(self, amount=2):
+        """
+        View popits to earn mints
+
+        This creates sessions automatically and earns mints!
+
+        Args:
+            amount (int): How many popits to view (default: 2)
+
+        Returns:
+            tuple: (success: bool, status_code: int, response_data: dict or str)
+        """
+        headers = self._get_headers()
+        headers['content-type'] = 'application/json'
+
+        response = self.session.post(
+            f'{self.BASE_URL}/popits/view',
+            headers=headers,
+            json={'amount': amount}
+        )
+
+        # Accept both 200 OK and 204 No Content as success
+        success = response.status_code in [200, 204]
+        response_data = None
+
+        # Try to parse response
+        try:
+            if response.text:
+                response_data = response.json()
+            else:
+                response_data = "No content"
+        except:
+            response_data = response.text[:100] if response.text else f"Status {response.status_code}"
+
+        return (success, response.status_code, response_data)
+
+    def submit_vdf_proof(self, session_id, root, leaves_amount):
+        """
+        Submit VDF proof
+
+        Args:
+            session_id (str): VDF session ID
+            root (str): Final hash in chain
+            leaves_amount (int): Number of taps/hashes
+
+        Returns:
+            dict: {'selected_amount': int}
+        """
+        headers = self._get_headers()
+        headers['content-type'] = 'application/json'
+
+        response = self.session.post(
+            f'{self.BASE_URL}/v1/vdf/sessions/{session_id}/submit',
+            headers=headers,
+            json={
+                'root': root,
+                'leaves_amount': leaves_amount
+            }
+        )
+        return response.json() if response.status_code == 200 else None
+
+    def verify_vdf_taps(self, session_id, hashes, proof, leaves):
+        """
+        Verify taps for anti-bot check
+
+        Args:
+            session_id (str): VDF session ID
+            hashes (list): Array of tap hash objects
+            proof (str): Merkle tree proof hex
+            leaves (list): Array of leaf hashes
+
+        Returns:
+            dict: {'taps': int} or None on error
+        """
+        headers = self._get_headers()
+        headers['content-type'] = 'application/json'
+
+        payload = {
+            'hashes': hashes,
+            'proof': proof,
+            'leaves': leaves
+        }
+
+        response = self.session.post(
+            f'{self.BASE_URL}/v1/vdf/sessions/{session_id}/verify',
+            headers=headers,
+            json=payload
+        )
+
+        # Enhanced debugging
+        console.print(f"[dim]     DEBUG - Verify Status: {response.status_code}[/]")
+
+        if response.status_code != 200:
+            console.print(f"[red]     DEBUG - Error Response: {response.text[:200]}[/]")
+            return None
+
+        try:
+            result = response.json()
+            console.print(f"[dim]     DEBUG - API Response: {result}[/]")
+            return result
+        except:
+            console.print(f"[red]     DEBUG - Failed to parse JSON: {response.text[:200]}[/]")
+            return None 
