@@ -1,5 +1,6 @@
 import sys
 import time
+import json
 from datetime import datetime, timezone
 from src import (
     AckinackiAPI,
@@ -25,6 +26,30 @@ from src.display import (
 DISPLAY_MODE = 'compact'  # Change to 'enhanced' for more visual display
 SHOW_API_STATUS = False   # Set to True to show spinners during API calls
 
+def save_tokens(access_token, refresh_token):
+    """Save tokens to file for persistence"""
+    try:
+        tokens = {
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        }
+        with open('tokens.json', 'w') as f:
+            json.dump(tokens, f, indent=2)
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not save tokens: {e}[/]")
+
+def load_tokens():
+    """Load tokens from file"""
+    try:
+        with open('tokens.json', 'r') as f:
+            tokens = json.load(f)
+            return tokens.get('access_token'), tokens.get('refresh_token')
+    except FileNotFoundError:
+        return None, None
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not load tokens: {e}[/]")
+        return None, None
+
 def parse_datetime(date_str):
     try:
         # First try the standard format
@@ -43,23 +68,42 @@ def parse_datetime(date_str):
 def main():
     sys.tracebacklimit = 0
 
-    # Read session data from token.txt
-    session_data = read_or_create_session_data()
-    if not session_data:
-        console.print("[red]No session data provided. Exiting...[/]")
-        return
+    # Try to load saved tokens first
+    access_token, refresh_token = load_tokens()
 
-    # Exchange session for access token
-    access_token = authenticate_with_session_data(session_data)
-    if not access_token:
-        console.print("[red]Authentication failed. Exiting...[/]")
-        return
+    # If no saved tokens, authenticate with session data
+    if not access_token or not refresh_token:
+        # Read session data from token.txt
+        session_data = read_or_create_session_data()
+        if not session_data:
+            console.print("[red]No session data provided. Exiting...[/]")
+            return
+
+        # Exchange session for access token and refresh token
+        auth_result = authenticate_with_session_data(session_data)
+        if not auth_result or auth_result.get('status') == 'error':
+            console.print("[red]Authentication failed. Exiting...[/]")
+            return
+
+        access_token = auth_result['access_token']
+        refresh_token = auth_result['refresh_token']
+
+        # Save tokens for future use
+        save_tokens(access_token, refresh_token)
+    else:
+        console.print("[cyan]Using saved tokens...[/]")
 
     console.print("[green]Starting bot...[/]")
     time.sleep(1)
     console.clear()
 
-    api = AckinackiAPI(access_token, show_status=SHOW_API_STATUS)
+    # Create API with token refresh callback
+    api = AckinackiAPI(
+        access_token,
+        refresh_token,
+        show_status=SHOW_API_STATUS,
+        on_token_refresh=save_tokens
+    )
     last_api_call = 0
     last_display_update = 0
     claiming_attempted = False
