@@ -20,8 +20,16 @@ class AckinackiAPI:
     """API client for Acki Nacki with persistent session and retry logic"""
     BASE_URL = 'https://app-backend.ackinacki.org/api'
 
-    def __init__(self, access_token):
+    def __init__(self, access_token, show_status=False):
+        """
+        Initialize API client
+
+        Args:
+            access_token (str): JWT access token for authentication
+            show_status (bool): Show status spinners during API calls (default: False)
+        """
         self.access_token = access_token
+        self.show_status = show_status
         self.session = create_api_session()  # Use shared session factory
         self._setup_session_headers()
 
@@ -93,6 +101,14 @@ class AckinackiAPI:
 
     def start_farming(self):
         """Start farming task using persistent session"""
+        if self.show_status:
+            with console.status("[bold green]Starting farming task...", spinner="dots"):
+                return self._start_farming_request()
+        else:
+            return self._start_farming_request()
+
+    def _start_farming_request(self):
+        """Internal method to start farming"""
         headers = self._get_headers()
         headers['content-length'] = '0'
         response = self.session.post(f'{self.BASE_URL}/users/tasks/farm/v2', headers=headers)
@@ -105,6 +121,14 @@ class AckinackiAPI:
 
     def claim_farming(self, task_id):
         """Claim farming task reward using persistent session"""
+        if self.show_status:
+            with console.status("[bold yellow]Claiming farming reward...", spinner="dots"):
+                return self._claim_farming_request(task_id)
+        else:
+            return self._claim_farming_request(task_id)
+
+    def _claim_farming_request(self, task_id):
+        """Internal method to claim farming reward"""
         headers = self._get_headers()
         headers['content-type'] = 'application/json'
 
