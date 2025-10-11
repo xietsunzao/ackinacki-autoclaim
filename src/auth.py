@@ -86,7 +86,7 @@ def authenticate_with_session_data(session_data_b64):
 
         if auth_result['status'] == 'success':
             console.print("[green]Access token obtained![/]")
-            return auth_result['access_token']
+            return auth_result  # Return full auth result with both tokens
         else:
             console.print("[red]Authentication failed[/]")
             return None
@@ -111,7 +111,7 @@ def authenticate_with_start_url(start_url):
 
     if auth_result['status'] == 'success':
         console.print("[green]Access token obtained successfully![/]")
-        return auth_result['access_token']
+        return auth_result  # Return full auth result with both tokens
     else:
         console.print("[red]Authentication failed[/]")
         return None
@@ -161,3 +161,49 @@ def get_access_token():
         return None
 
     return authenticate_with_start_url(start_url)
+
+def refresh_access_token(refresh_token):
+    """
+    Refresh access token using refresh token
+
+    Args:
+        refresh_token (str): JWT refresh token
+
+    Returns:
+        dict: {'access_token': str, 'refresh_token': str, 'status': str} or {'status': 'error', 'message': str}
+    """
+    session = create_auth_session()
+
+    try:
+        url = "https://app-backend.ackinacki.org/api/v1/auth/refresh"
+
+        headers = {
+            'accept': 'application/json, text/plain, */*',
+            'accept-language': 'en-US,en;q=0.9,id-ID;q=0.8,id;q=0.7',
+            'content-type': 'application/json',
+            'origin': 'https://t.ackinacki.com',
+            'referer': 'https://t.ackinacki.com/',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
+        }
+
+        payload = {'refresh_token': refresh_token}
+        response = session.post(url, headers=headers, json=payload)
+
+        if response.status_code == 200:
+            auth_data = response.json()
+            console.print("[green]Token refreshed successfully![/]")
+            return {
+                'access_token': auth_data.get('access_token'),
+                'refresh_token': auth_data.get('refresh_token'),
+                'status': 'success'
+            }
+        else:
+            console.print(f"[red]Token refresh failed with status {response.status_code}[/]")
+            console.print(f"[yellow]Response: {response.text}[/]")
+            return {'status': 'error', 'message': response.text}
+
+    except Exception as e:
+        console.print(f"[red]Error during token refresh: {e}[/]")
+        return {'status': 'error', 'message': str(e)}
+    finally:
+        session.close()
