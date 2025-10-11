@@ -20,16 +20,20 @@ class AckinackiAPI:
     """API client for Acki Nacki with persistent session and retry logic"""
     BASE_URL = 'https://app-backend.ackinacki.org/api'
 
-    def __init__(self, access_token, show_status=False):
+    def __init__(self, access_token, refresh_token=None, show_status=False, on_token_refresh=None):
         """
         Initialize API client
 
         Args:
             access_token (str): JWT access token for authentication
+            refresh_token (str): JWT refresh token for automatic token refresh (optional)
             show_status (bool): Show status spinners during API calls (default: False)
+            on_token_refresh (callable): Callback function to call after successful token refresh (optional)
         """
         self.access_token = access_token
+        self.refresh_token = refresh_token
         self.show_status = show_status
+        self.on_token_refresh = on_token_refresh
         self.session = create_api_session()  # Use shared session factory
         self._setup_session_headers()
 
@@ -49,6 +53,45 @@ class AckinackiAPI:
             'user-agent': generate_user_agent()  # Rotate user agent per request
         }
 
+    def update_tokens(self, access_token, refresh_token):
+        """
+        Update access and refresh tokens
+
+        Args:
+            access_token (str): New JWT access token
+            refresh_token (str): New JWT refresh token
+        """
+        self.access_token = access_token
+        self.refresh_token = refresh_token
+        # Update session headers with new token
+        self.session.headers.update({'jwt-auth': self.access_token})
+
+    def refresh_tokens(self):
+        """
+        Refresh access token using refresh token
+
+        Returns:
+            bool: True if refresh successful, False otherwise
+        """
+        if not self.refresh_token:
+            console.print("[red]No refresh token available[/]")
+            return False
+
+        from .auth import refresh_access_token
+
+        console.print("[yellow]Token expired. Refreshing...[/]")
+        result = refresh_access_token(self.refresh_token)
+
+        if result['status'] == 'success':
+            self.update_tokens(result['access_token'], result['refresh_token'])
+            # Call callback if provided
+            if self.on_token_refresh:
+                self.on_token_refresh(result['access_token'], result['refresh_token'])
+            return True
+        else:
+            console.print("[red]Token refresh failed[/]")
+            return False
+
     def close(self):
         """Close the session and release connections"""
         if self.session:
@@ -62,7 +105,17 @@ class AckinackiAPI:
 
         # Check status code first before trying to parse JSON
         if response.status_code == 401:
-            raise TokenExpiredError("Token has expired")
+            # Try to refresh token automatically
+            if self.refresh_token and self.refresh_tokens():
+                # Retry request with new token
+                response = self.session.get(f'{self.BASE_URL}/users/me', headers=headers)
+                if response.status_code != 401:
+                    # Token refresh worked, continue processing
+                    pass
+                else:
+                    raise TokenExpiredError("Token has expired")
+            else:
+                raise TokenExpiredError("Token has expired")
 
         # Try to parse JSON response
         try:
