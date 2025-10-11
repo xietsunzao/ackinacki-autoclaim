@@ -1,5 +1,7 @@
 import requests
 import random
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 from .exceptions import TokenExpiredError, TokenInvalidError
 from rich.console import Console
 
@@ -20,18 +22,54 @@ class AckinackiAPI:
 
     def __init__(self, access_token):
         self.access_token = access_token
+        self.session = self._create_session()
+        self._setup_session_headers()
 
-    def _get_headers(self):
-        return {
+    def _create_session(self):
+        """Create a session with retry logic and connection pooling"""
+        session = requests.Session()
+
+        # Configure retry strategy
+        retry_strategy = Retry(
+            total=3,  # Total number of retries
+            backoff_factor=1,  # Wait 1, 2, 4 seconds between retries
+            status_forcelist=[429, 500, 502, 503, 504],  # Retry on these status codes
+            allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"]
+        )
+
+        # Mount adapter with retry strategy for both http and https
+        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=20)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        return session
+
+    def _setup_session_headers(self):
+        """Setup persistent headers for the session"""
+        self.session.headers.update({
             'accept': 'application/json, text/plain, */*',
             'origin': 'https://t.ackinacki.com',
             'referer': 'https://t.ackinacki.com/',
             'jwt-auth': self.access_token,
             'user-agent': generate_user_agent()
+        })
+
+    def _get_headers(self):
+        """Get additional headers for specific requests"""
+        return {
+            'user-agent': generate_user_agent()  # Rotate user agent per request
         }
+
+    def close(self):
+        """Close the session and release connections"""
+        if self.session:
+            self.session.close()
     
     def get_user_data(self):
-        response = requests.get(f'{self.BASE_URL}/users/me', headers=self._get_headers())
+        """Get user data using persistent session"""
+        # Update user agent for this request
+        headers = self._get_headers()
+        response = self.session.get(f'{self.BASE_URL}/users/me', headers=headers)
 
         # Check status code first before trying to parse JSON
         if response.status_code == 401:
@@ -62,8 +100,9 @@ class AckinackiAPI:
         raise TokenExpiredError("Unexpected API response format")
 
     def get_farming_task(self):
-        """Get farming task status - NEW API"""
-        response = requests.get(f'{self.BASE_URL}/users/tasks/farm/v2', headers=self._get_headers())
+        """Get farming task status using persistent session"""
+        headers = self._get_headers()
+        response = self.session.get(f'{self.BASE_URL}/users/tasks/farm/v2', headers=headers)
 
         if response.status_code == 200:
             return response.json()
@@ -72,10 +111,10 @@ class AckinackiAPI:
             return None
 
     def start_farming(self):
-        """Start farming task - NEW API"""
+        """Start farming task using persistent session"""
         headers = self._get_headers()
         headers['content-length'] = '0'
-        response = requests.post(f'{self.BASE_URL}/users/tasks/farm/v2', headers=headers)
+        response = self.session.post(f'{self.BASE_URL}/users/tasks/farm/v2', headers=headers)
 
         # POST returns empty response on success
         return {
@@ -84,12 +123,12 @@ class AckinackiAPI:
         }
 
     def claim_farming(self, task_id):
-        """Claim farming task reward - NEW API"""
+        """Claim farming task reward using persistent session"""
         headers = self._get_headers()
         headers['content-type'] = 'application/json'
 
         payload = {'task_id': task_id}
-        response = requests.post(f'{self.BASE_URL}/users/tasks/claim', headers=headers, json=payload)
+        response = self.session.post(f'{self.BASE_URL}/users/tasks/claim', headers=headers, json=payload)
 
         return {
             'status': 'success' if response.status_code == 200 else 'error',
