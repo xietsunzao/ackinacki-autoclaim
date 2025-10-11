@@ -13,6 +13,17 @@ from src import (
     TokenExpiredError,
     TokenInvalidError
 )
+from src.display import (
+    display_enhanced_info,
+    display_compact_info,
+    show_claim_animation,
+    show_start_animation
+)
+
+# Configuration: Set display mode
+# Options: 'compact' (original style), 'enhanced' (with panels and tables)
+DISPLAY_MODE = 'compact'  # Change to 'enhanced' for more visual display
+SHOW_API_STATUS = False   # Set to True to show spinners during API calls
 
 def parse_datetime(date_str):
     try:
@@ -48,7 +59,7 @@ def main():
     time.sleep(1)
     console.clear()
 
-    api = AckinackiAPI(access_token)
+    api = AckinackiAPI(access_token, show_status=SHOW_API_STATUS)
     last_api_call = 0
     last_display_update = 0
     claiming_attempted = False
@@ -70,7 +81,10 @@ def main():
 
                     if not farming_task or not farming_task.get('reward'):
                         # No farming task, try to start one
-                        console.print("[yellow]No active farming task. Starting...[/]")
+                        if DISPLAY_MODE == 'enhanced':
+                            show_start_animation()
+                        else:
+                            console.print("[yellow]No active farming task. Starting...[/]")
                         api.start_farming()
                         time.sleep(2)
                         continue
@@ -81,7 +95,10 @@ def main():
                     # Check if already claimed
                     if reward_data.get('claimed', False):
                         # Already claimed, start new farming
-                        console.print("[yellow]Reward already claimed. Starting new farming...[/]")
+                        if DISPLAY_MODE == 'enhanced':
+                            show_start_animation()
+                        else:
+                            console.print("[yellow]Reward already claimed. Starting new farming...[/]")
                         api.start_farming()
                         claiming_attempted = False
                         time.sleep(2)
@@ -92,7 +109,11 @@ def main():
 
                     # Check if ready to claim
                     if current_time >= claim_time and not claiming_attempted:
-                        console.print("\n[green]Claiming farming reward...[/]")
+                        if DISPLAY_MODE == 'enhanced':
+                            show_claim_animation()
+                        else:
+                            console.print("\n[green]Claiming farming reward...[/]")
+
                         claim_response = api.claim_farming(task_id)
                         claiming_attempted = True
 
@@ -106,14 +127,20 @@ def main():
                         time.sleep(5)
                         continue
 
-                    # Display info
-                    display_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
+                    # Display info based on mode
+                    if DISPLAY_MODE == 'enhanced':
+                        display_enhanced_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
+                    else:
+                        display_compact_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
                     last_display_update = current_time
 
                 elif current_time - last_display_update >= 1:
                     # Update display every second (only if we have data)
                     if user_data and farming_task:
-                        display_info(user_data, farming_task, claim_time, first_run=False)
+                        if DISPLAY_MODE == 'enhanced':
+                            display_enhanced_info(user_data, farming_task, claim_time, first_run=False)
+                        else:
+                            display_compact_info(user_data, farming_task, claim_time, first_run=False)
                         last_display_update = current_time
 
                 time.sleep(0.1)
