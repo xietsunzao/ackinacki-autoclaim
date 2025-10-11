@@ -117,16 +117,20 @@ def main():
                         last_display_update = current_time
 
                 time.sleep(0.1)
-                
+
             except KeyboardInterrupt:
                 raise KeyboardInterrupt
             except TokenExpiredError:
                 handle_token_error()
             except Exception as e:
                 last_api_call = handle_api_error(e, last_api_call)
-                
+
     except KeyboardInterrupt:
         handle_program_exit()
+    finally:
+        # Clean up: close API session
+        api.close()
+        console.print("[dim]Session closed.[/]")
 
 if __name__ == "__main__":
     main()
