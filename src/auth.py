@@ -1,9 +1,30 @@
 import requests
 import json
 import base64
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 from rich.console import Console
 
 console = Console()
+
+def create_auth_session():
+    """Create a session with retry logic for authentication requests"""
+    session = requests.Session()
+
+    # Configure retry strategy for authentication
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "POST"]
+    )
+
+    # Mount adapter with retry strategy
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    return session
 
 def decode_base64_url(data):
     """Decode base64 with automatic padding fix"""
@@ -29,7 +50,9 @@ def get_session_id_from_url(start_url):
         return None, None
 
 def exchange_session_for_token(session_id, locale='en'):
-    """Exchange session_id for access_token and refresh_token"""
+    """Exchange session_id for access_token and refresh_token using persistent session"""
+    session = create_auth_session()
+
     try:
         url = f"https://app-backend.ackinacki.org/api/v1/auth/session?session_id={session_id}&locale={locale}"
 
@@ -41,7 +64,7 @@ def exchange_session_for_token(session_id, locale='en'):
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'
         }
 
-        response = requests.get(url, headers=headers)
+        response = session.get(url, headers=headers)
 
         if response.status_code == 200:
             auth_data = response.json()
@@ -58,6 +81,8 @@ def exchange_session_for_token(session_id, locale='en'):
     except Exception as e:
         console.print(f"[red]Error during authentication: {e}[/]")
         return {'status': 'error', 'message': str(e)}
+    finally:
+        session.close()
 
 def authenticate_with_session_data(session_data_b64):
     """Complete authentication flow from base64 session data to access token"""
