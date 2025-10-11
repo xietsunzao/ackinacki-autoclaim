@@ -228,6 +228,13 @@ class PopitsManager:
                 # Watch the reel
                 success, status_code, _ = self.api.watch_popit(popit_id)
 
+                # Handle 401 - token expired, refresh and retry
+                if status_code == 401:
+                    console.print(f"[yellow]⟳ (401 - refreshing token)[/]")
+                    if self.api.refresh_tokens():
+                        console.print(f"[cyan]  Reel {i+1}/{min(target_count, len(unwatched))}: {symbol}[/]", end=' ')
+                        success, status_code, _ = self.api.watch_popit(popit_id)
+
                 if success:
                     console.print(f"[green]✓[/]")
                     watched_count += 1
@@ -325,16 +332,25 @@ class PopitsManager:
             target_bits = session['targetBits']
             console.print(f"[green]     ✓ Session: {session_id[:8]}... (targetBits: {target_bits})[/]")
 
-            # 3. Generate random taps (under 100 to avoid bot detection)
-            console.print("[cyan]  3. Simulating human taps...[/]")
+            # 3. Call view to decrease mint (CRITICAL - must do this before submit!)
+            console.print("[cyan]  3. Calling view to consume mint...[/]")
+            view_success, view_status, view_response = self.api.view_popits(amount=1)
+            if not view_success:
+                console.print(f"[red]     Failed to call view ({view_status})[/]")
+                return False
+            console.print(f"[green]     ✓ View called (mint consumed)[/]")
+            time.sleep(2)
+
+            # 4. Generate random taps (under 100 to avoid bot detection)
+            console.print("[cyan]  4. Simulating human taps...[/]")
             num_taps = random.randint(
                 self.config.get('vdf_min_taps', 40),
                 self.config.get('vdf_max_taps', 85)
             )
             console.print(f"[dim]     Target: {num_taps} taps (safe under 100)[/]")
 
-            # 4. Animate tapping over 15 seconds with visual progress
-            console.print("[cyan]  4. Tapping animation (15 seconds)...[/]")
+            # 5. Animate tapping over 15 seconds with visual progress
+            console.print("[cyan]  5. Tapping animation (15 seconds)...[/]")
 
             start_time = time.time()
             total_duration = 15  # 15 seconds total
@@ -377,8 +393,8 @@ class PopitsManager:
             # Ensure we have exactly the target number
             console.print(f"[green]     ✓ Completed {len(hashes)} taps in 15 seconds!          [/]")
 
-            # 5. Submit proof with actual number of hashes
-            console.print("[cyan]  5. Submitting proof...[/]")
+            # 6. Submit proof with actual number of hashes
+            console.print("[cyan]  6. Submitting proof...[/]")
             root_hash = hashes[-1]['hash']
             leaves_amount = len(hashes)  # Submit actual tap count
             result = self.api.submit_vdf_proof(session_id, root_hash, leaves_amount)
@@ -389,8 +405,8 @@ class PopitsManager:
             selected_amount = result.get('selected_amount', 0)
             console.print(f"[green]     ✓ Proof submitted (selected: {selected_amount})[/]")
 
-            # 6. Verify with ONLY the selected amount of hashes
-            console.print("[cyan]  6. Verifying taps...[/]")
+            # 7. Verify with ONLY the selected amount of hashes
+            console.print("[cyan]  7. Verifying taps...[/]")
 
             # Use only the number of hashes the API selected
             selected_hashes = hashes[:selected_amount] if selected_amount > 0 else hashes[:1]
