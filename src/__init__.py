@@ -1,5 +1,5 @@
 from .api import AckinackiAPI
-from .auth import authenticate_with_session_data
+from .auth import authenticate_with_session_data, refresh_access_token
 from .core import read_or_create_session_data, display_info, console
 from .session import create_session, create_api_session, create_auth_session
 from .display import (
@@ -19,6 +19,7 @@ from .exceptions import (
 __all__ = [
     'AckinackiAPI',
     'authenticate_with_session_data',
+    'refresh_access_token',
     'read_or_create_session_data',
     'display_info',
     'console',
