@@ -15,6 +15,8 @@ from .exceptions import (
     TokenExpiredError,
     TokenInvalidError
 )
+from .popits import PopitsManager
+from .vdf import simulate_human_taps, calculate_merkle_proof, validate_tap_count
 
 __all__ = [
     'AckinackiAPI',
@@ -34,5 +36,9 @@ __all__ = [
     'handle_program_exit',
     'handle_token_error',
     'TokenExpiredError',
-    'TokenInvalidError'
+    'TokenInvalidError',
+    'PopitsManager',
+    'simulate_human_taps',
+    'calculate_merkle_proof',
+    'validate_tap_count'
 ] 
