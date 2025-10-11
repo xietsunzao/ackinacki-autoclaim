@@ -1,13 +1,12 @@
-import requests
 import random
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
+from .session import create_api_session
 from .exceptions import TokenExpiredError, TokenInvalidError
 from rich.console import Console
 
 console = Console()
 
 def generate_user_agent():
+    """Generate a random mobile user agent for requests"""
     mobile_devices = [
         "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
         "Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
@@ -18,31 +17,13 @@ def generate_user_agent():
     return random.choice(mobile_devices)
 
 class AckinackiAPI:
+    """API client for Acki Nacki with persistent session and retry logic"""
     BASE_URL = 'https://app-backend.ackinacki.org/api'
 
     def __init__(self, access_token):
         self.access_token = access_token
-        self.session = self._create_session()
+        self.session = create_api_session()  # Use shared session factory
         self._setup_session_headers()
-
-    def _create_session(self):
-        """Create a session with retry logic and connection pooling"""
-        session = requests.Session()
-
-        # Configure retry strategy
-        retry_strategy = Retry(
-            total=3,  # Total number of retries
-            backoff_factor=1,  # Wait 1, 2, 4 seconds between retries
-            status_forcelist=[429, 500, 502, 503, 504],  # Retry on these status codes
-            allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"]
-        )
-
-        # Mount adapter with retry strategy for both http and https
-        adapter = HTTPAdapter(max_retries=retry_strategy, pool_connections=10, pool_maxsize=20)
-        session.mount("http://", adapter)
-        session.mount("https://", adapter)
-
-        return session
 
     def _setup_session_headers(self):
         """Setup persistent headers for the session"""
