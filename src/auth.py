@@ -1,30 +1,9 @@
-import requests
 import json
 import base64
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
+from .session import create_auth_session
 from rich.console import Console
 
 console = Console()
-
-def create_auth_session():
-    """Create a session with retry logic for authentication requests"""
-    session = requests.Session()
-
-    # Configure retry strategy for authentication
-    retry_strategy = Retry(
-        total=3,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "POST"]
-    )
-
-    # Mount adapter with retry strategy
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-
-    return session
 
 def decode_base64_url(data):
     """Decode base64 with automatic padding fix"""
