@@ -13,6 +13,14 @@ from rich import box
 
 console = Console()
 
+# Global flag to suppress display when Popits is running
+_popits_active = False
+
+def set_popits_active(active):
+    """Set whether Popits is currently running (suppresses display)"""
+    global _popits_active
+    _popits_active = active
+
 
 def format_time(seconds):
     """
@@ -222,12 +230,13 @@ def display_compact_info(user_data, farming_task, end_time, first_run=False):
         console.print(f"{' '.join(boost_boxes)}")
         print()  # Add empty line for timer
 
-    # Timer display
-    remaining = max(0, int(end_time - time.time()))
-    if first_run:
-        print(f"Remaining Time {format_time(remaining)}", end='', flush=True)
-    else:
-        print(f"\rRemaining Time {format_time(remaining)}", end='', flush=True)
+    # Timer display (skip if Popits is active)
+    if not _popits_active:
+        remaining = max(0, int(end_time - time.time()))
+        if first_run:
+            print(f"Remaining Time {format_time(remaining)}", end='', flush=True)
+        else:
+            print(f"\rRemaining Time {format_time(remaining)}", end='', flush=True)
 
 
 def show_claim_animation():
