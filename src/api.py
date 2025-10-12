@@ -388,6 +388,13 @@ class AckinackiAPI:
             'leaves': leaves
         }
 
+        # Debug payload structure
+        console.print(f"[dim]     DEBUG - Payload structure:[/]")
+        console.print(f"[dim]       - hashes count: {len(hashes)}[/]")
+        console.print(f"[dim]       - proof type: {type(proof)}, length: {len(proof)}[/]")
+        console.print(f"[dim]       - leaves count: {len(leaves)}[/]")
+        console.print(f"[dim]       - First leaf sample: {leaves[0][:20]}...[/]")
+
         response = self.session.post(
             f'{self.BASE_URL}/v1/vdf/sessions/{session_id}/verify',
             headers=headers,
@@ -399,6 +406,9 @@ class AckinackiAPI:
 
         if response.status_code != 200:
             console.print(f"[red]     DEBUG - Error Response: {response.text[:200]}[/]")
+            # Try to give more helpful error info
+            if "Proof or hashes" in response.text:
+                console.print(f"[yellow]     HINT: Proof/hash validation failed - check Merkle tree calculation[/]")
             return None
 
         try:
