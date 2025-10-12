@@ -1,7 +1,20 @@
 import sys
+import os
 import time
 import json
+import threading
 from datetime import datetime, timezone
+
+# Fix Windows Unicode encoding issues
+if sys.platform == 'win32':
+    os.system('chcp 65001 >nul 2>&1')
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
+# Global print lock to prevent overlapping output
+print_lock = threading.Lock()
+# Flag to pause farming display when Popits is running
+popits_running = threading.Event()
 from src import (
     AckinackiAPI,
     authenticate_with_session_data,
@@ -19,7 +32,8 @@ from src.display import (
     display_enhanced_info,
     display_compact_info,
     show_claim_animation,
-    show_start_animation
+    show_start_animation,
+    set_popits_active
 )
 
 # Configuration: Set display mode
@@ -95,6 +109,37 @@ def parse_datetime(date_str):
             return datetime.fromisoformat(modified_date_str.replace('Z', '+00:00'))
         raise
 
+def popits_worker(popits_manager, config):
+    """
+    Background thread for Popits feature
+    Continuously watches reels until max mints reached
+    """
+    while True:
+        try:
+            # Signal that Popits is running FIRST (pause farming display immediately)
+            popits_running.set()
+            set_popits_active(True)  # Suppress farming countdown display
+            time.sleep(1.0)  # Give farming thread time to see the flag and finish current print
+
+            # Clear screen and show Popits banner (inside the run_cycle, it will use locks)
+            popits_manager.run_cycle()
+
+            with print_lock:
+                console.print(f"\n[cyan]Next Popits check in {config['check_interval']//60} minutes[/]\n")
+                console.print("[dim]Resuming farming display...[/]\n")
+
+            # Signal that Popits is done (resume farming display)
+            set_popits_active(False)  # Re-enable farming countdown display
+            popits_running.clear()
+
+            time.sleep(config['check_interval'])
+        except Exception as e:
+            with print_lock:
+                console.print(f"[red]Popits worker error: {e}[/]")
+            set_popits_active(False)  # Re-enable on error
+            popits_running.clear()
+            time.sleep(60)  # Wait 1 minute on error
+
 def main():
     sys.tracebacklimit = 0
 
@@ -137,10 +182,20 @@ def main():
 
     # Initialize Popits Manager if enabled
     popits_manager = None
-    last_popits_check = 0
+    popits_thread = None
     if POPITS_CONFIG['enabled']:
-        console.print("[green]✓ Popits feature enabled[/]")
-        popits_manager = PopitsManager(api, POPITS_CONFIG)
+        console.print("[green]✓ Popits feature enabled (running in parallel)[/]")
+        popits_manager = PopitsManager(api, POPITS_CONFIG, print_lock=print_lock)
+
+        # Start Popits in background thread
+        popits_thread = threading.Thread(
+            target=popits_worker,
+            args=(popits_manager, POPITS_CONFIG),
+            daemon=True,
+            name="PopitsWorker"
+        )
+        popits_thread.start()
+        console.print("[green]✓ Popits background thread started[/]")
     else:
         console.print("[dim]Popits feature disabled (set POPITS_CONFIG['enabled'] = True to enable)[/]")
 
@@ -156,15 +211,6 @@ def main():
             try:
                 current_time = time.time()
                 current_time_dt = datetime.now(timezone.utc)
-
-                # Run Popits cycle if enabled and interval passed
-                if popits_manager and (current_time - last_popits_check >= POPITS_CONFIG['check_interval']):
-                    console.print("\n[bold yellow]═══════════════════════════════════[/]")
-                    console.print("[bold yellow]   Popits Cycle Triggered   [/]")
-                    console.print("[bold yellow]═══════════════════════════════════[/]\n")
-                    popits_manager.run_cycle()
-                    last_popits_check = current_time
-                    console.print(f"\n[cyan]Next Popits check in {POPITS_CONFIG['check_interval']//60} minutes[/]\n")
 
                 if current_time - last_api_call >= 5:
                     # Get user data and farming task status
@@ -220,20 +266,22 @@ def main():
                         time.sleep(5)
                         continue
 
-                    # Display info based on mode
-                    if DISPLAY_MODE == 'enhanced':
-                        display_enhanced_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
-                    else:
-                        display_compact_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
+                    # Display info based on mode (with lock)
+                    with print_lock:
+                        if DISPLAY_MODE == 'enhanced':
+                            display_enhanced_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
+                        else:
+                            display_compact_info(user_data, farming_task, claim_time, first_run=(last_display_update == 0))
                     last_display_update = current_time
 
                 elif current_time - last_display_update >= 1:
-                    # Update display every second (only if we have data)
-                    if user_data and farming_task:
-                        if DISPLAY_MODE == 'enhanced':
-                            display_enhanced_info(user_data, farming_task, claim_time, first_run=False)
-                        else:
-                            display_compact_info(user_data, farming_task, claim_time, first_run=False)
+                    # Update display every second (only if we have data and Popits NOT running)
+                    if user_data and farming_task and not popits_running.is_set():
+                        with print_lock:
+                            if DISPLAY_MODE == 'enhanced':
+                                display_enhanced_info(user_data, farming_task, claim_time, first_run=False)
+                            else:
+                                display_compact_info(user_data, farming_task, claim_time, first_run=False)
                         last_display_update = current_time
 
                 time.sleep(0.1)
